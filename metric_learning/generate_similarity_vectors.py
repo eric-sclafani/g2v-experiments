@@ -86,7 +86,6 @@ def create_same_author_vectors(author_ids:List[str], data:pd.DataFrame) -> Tuple
 
 def create_different_author_vectors(data:pd.DataFrame, same_vectors_shape:Tuple[int,int]) -> Tuple[np.ndarray, List[str]]:
     """Creates similarity vectors using documents from different authors. The amount is equal to the # of same author vectors"""
-    
     X_train = []
     y_train = []
     for _ in range(same_vectors_shape[0]):
