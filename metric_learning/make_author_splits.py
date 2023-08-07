@@ -58,7 +58,7 @@ def main():
     
     parser.add_argument("-d",
                         "--dataset_dir",
-                        default="../data/pan22/preprocessed/pan22_preprocessed.jsonl")
+                        default="../data/hrs_release_May23DryRun")
     
     parser.add_argument("--num_train",
                         type=int,
