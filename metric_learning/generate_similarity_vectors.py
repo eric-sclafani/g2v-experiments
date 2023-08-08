@@ -128,17 +128,5 @@ def main():
     write_to_file(X_train, "metric_learn_data/X_train.pkl")
     write_to_file(y_train, "metric_learn_data/y_train.pkl")
         
-        
-    
-        
-        
-
-   
-
-    
-
-    
-
-
 if __name__ == "__main__":
     main()
