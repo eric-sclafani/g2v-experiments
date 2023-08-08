@@ -11,19 +11,6 @@ from more_itertools import distinct_combinations
 
 from gram2vec import vectorizer
 
-@dataclass
-class Document:
-    
-    entry:pd.Series
-
-    @property
-    def text(self):
-        return self.entry["fullText"].values[0]
-    
-    @property
-    def author_id(self):
-        return self.entry["authorIDs"].values[0]
-
 def measure_time(func):
     """Debugging function for measuring function execution time"""
     def wrapper(*args, **kwargs):
@@ -35,16 +22,54 @@ def measure_time(func):
         return result
     return wrapper
 
+@dataclass
+class Document:
+    
+    entry:pd.Series
+
+    @property
+    def vector(self) -> np.ndarray:
+        """Extracts only numeric values from a series"""
+        return self.entry.apply(pd.to_numeric, errors='coerce').dropna().values
+    
+    @property
+    def author_id(self) -> str:
+        return self.entry["authorIDs"]
+    
+    @property
+    def document_id(self)-> str:
+        return self.entry.name
+    
+@dataclass
+class DocumentPair:
+    
+    doc1: Document
+    doc2: Document
+    
+    @property
+    def doc_id_pair(self) -> Tuple[str,str]:
+        return self.doc1.document_id, self.doc2.document_id
+    
+    def has_different_author_id(self):
+        return self.doc1.author_id != self.doc2.author_id
+    
+    
+    @classmethod
+    def from_dataframe(cls, df:pd.DataFrame):
+        d1 = Document(df.iloc[0])
+        d2 = Document(df.iloc[1])
+        return cls(d1, d2)
+
 def load_data(path:str) -> pd.DataFrame:
-    df = vectorizer.load_jsonlines(path)
+    df = vectorizer.from_jsonlines(path)
     df["authorIDs"] = df["authorIDs"].apply(lambda x: "".join(x))
     return df
     
 def get_unique_author_ids(df:pd.DataFrame) -> List[str]:
     return df["authorIDs"].unique().tolist()
 
-def get_author_docs(df:pd.DataFrame, author_id:str) -> pd.Series:
-    return df["fullText"].loc[df["authorIDs"] == author_id]
+def get_author_doc_vectors(df:pd.DataFrame, author_id:str) -> pd.DataFrame:
+    return df.loc[df["authorIDs"] == author_id]
 
 def apply_vectorizer(documents:Iterable) -> np.ndarray:
     return vectorizer.from_documents(documents).values
@@ -72,9 +97,7 @@ def create_same_author_vectors(author_ids:List[str], data:pd.DataFrame) -> Tuple
     X_train = []
     y_train = []
     for author_id in author_ids:
-        documents = get_author_docs(data, author_id)
-        vectors = apply_vectorizer(documents)
-        
+        vectors = get_author_doc_vectors(data, author_id).select_dtypes(include=np.number).values
         same_author_vector_pairs = distinct_combinations(vectors.tolist(), r=2)
         similarity_vectors = 1 - calculate_difference(same_author_vector_pairs)
         
@@ -84,28 +107,48 @@ def create_same_author_vectors(author_ids:List[str], data:pd.DataFrame) -> Tuple
             
     return np.array(X_train), y_train
 
+
+def sample_n_pairs(data:pd.DataFrame, n:int) -> List[DocumentPair]:
+    """Creates n amount of different author document pairs"""
+    
+    seen_doc_id_pairs = [] # ensure no two doc pairs have the same exact documents
+    pairs = []
+    while len(pairs) != n:
+        sampled = data.sample(n=2)
+        pair = DocumentPair.from_dataframe(sampled)
+        if pair.has_different_author_id() and pair.doc_id_pair not in seen_doc_id_pairs:
+            pairs.append(pair)
+            seen_doc_id_pairs.append(pair.doc_id_pair)
+    return pairs
+
+    
+    
+    
+    
+    
+
 def create_different_author_vectors(data:pd.DataFrame, same_vectors_shape:Tuple[int,int]) -> Tuple[np.ndarray, List[str]]:
     """Creates similarity vectors using documents from different authors. The amount is equal to the # of same author vectors"""
-    X_train = []
-    y_train = []
-    for _ in range(same_vectors_shape[0]):
-        random_doc_1 = Document(data[["authorIDs", "fullText"]].sample(n=1))
-        random_doc_2 = Document(data[["authorIDs", "fullText"]].sample(n=1)) 
-        vector1 = apply_vectorizer([random_doc_1.text]).squeeze()
-        vector2 = apply_vectorizer([random_doc_2.text]).squeeze()
+    
+    # X_train = []
+    # y_train = []
+    # for _ in range(same_vectors_shape[0]):
+    #     random_doc_1 = Document(data[["authorIDs", "fullText"]].sample(n=1))
+    #     random_doc_2 = Document(data[["authorIDs", "fullText"]].sample(n=1)) 
+    #     vector1 = apply_vectorizer([random_doc_1.text]).squeeze()
+    #     vector2 = apply_vectorizer([random_doc_2.text]).squeeze()
         
-        if random_doc_1.author_id != random_doc_2.author_id:
-            similarity = 1 - difference([vector1, vector2])
-            X_train.append(similarity)
-            y_train.append(0)
+    #     if random_doc_1.author_id != random_doc_2.author_id:
+    #         similarity = 1 - difference([vector1, vector2])
+    #         X_train.append(similarity)
+    #         y_train.append(0)
                         
-    return np.array(X_train), y_train
+    # return np.array(X_train), y_train
 
 def write_to_file(obj, path:str):
     with open(path, "wb") as writer:
         pickle.dump(obj, writer)
     
-
 @measure_time
 def main():
     
@@ -115,18 +158,23 @@ def main():
                         default="../../data/hrs_release_May23DryRun")
     
     args = parser.parse_args()
-    data = load_data(args.dataset_dir)
-    author_ids = get_unique_author_ids(data)
+    document_vectors = load_data(args.dataset_dir)    
+    author_ids = get_unique_author_ids(document_vectors)
     
-    same_author_vectors, same_author_labels = create_same_author_vectors(author_ids, data)
-    diff_author_vectors, diff_author_labels = create_different_author_vectors(data, same_author_vectors.shape)
+    #same_author_vectors, same_author_labels = create_same_author_vectors(author_ids, document_vectors)
+ 
     
-    X_train = np.concatenate([same_author_vectors, diff_author_vectors], axis=0)
-    y_train = same_author_labels + diff_author_labels
+    
+    #diff_author_vectors, diff_author_labels = create_different_author_vectors(data, same_author_vectors.shape)
+    
+    sample_n_pairs(document_vectors, 20)
+    
+    # X_train = np.concatenate([same_author_vectors, diff_author_vectors], axis=0)
+    # y_train = same_author_labels + diff_author_labels
     
 
-    write_to_file(X_train, "metric_learn_data/X_train.pkl")
-    write_to_file(y_train, "metric_learn_data/y_train.pkl")
+    # write_to_file(X_train, "metric_learn_data/X_train.pkl")
+    # write_to_file(y_train, "metric_learn_data/y_train.pkl")
         
 if __name__ == "__main__":
     main()
