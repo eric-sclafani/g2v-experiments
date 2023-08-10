@@ -4,7 +4,8 @@ import argparse
 import pandas as pd
 import numpy as np
 import time
-import pickle 
+import pickle
+from pathlib import Path
 from typing import Iterable, List, Tuple
 from dataclasses import dataclass
 from more_itertools import distinct_combinations
@@ -35,7 +36,7 @@ class Document:
     @property
     def author_id(self) -> str:
         return self.entry["authorIDs"]
-    
+        
     @property
     def document_id(self)-> str:
         return self.entry.name
@@ -60,7 +61,8 @@ class DocumentPair:
         d2 = Document(df.iloc[1])
         return cls(d1, d2)
 
-def load_data(path:str) -> pd.DataFrame:
+@measure_time
+def apply_vectorizer(path:str) -> pd.DataFrame:
     df = vectorizer.from_jsonlines(path)
     df["authorIDs"] = df["authorIDs"].apply(lambda x: "".join(x))
     return df
@@ -71,9 +73,6 @@ def get_unique_author_ids(df:pd.DataFrame) -> List[str]:
 def get_author_doc_vectors(df:pd.DataFrame, author_id:str) -> pd.DataFrame:
     return df.loc[df["authorIDs"] == author_id]
 
-def apply_vectorizer(documents:Iterable) -> np.ndarray:
-    return vectorizer.from_documents(documents).values
-
 def to_array(iter:List[float]) -> np.ndarray:
     return np.array(iter)
 
@@ -83,14 +82,16 @@ def get_string(series:pd.Series) -> str:
 def get_author(series:pd.Series) -> str:
     return series.authorIDs.values[0]
 
-def difference(pair:Tuple[List,List]) -> np.ndarray:
-    """|a-b|"""
+def difference(pair:Tuple[List, List]) -> np.ndarray:
+    """Calculates the element-wise difference for two vectors"""
     return np.abs(to_array(pair[0]) - to_array(pair[1]))
 
-def calculate_difference(pairs:Iterable[Tuple]) -> np.ndarray:
+def calculate_difference_from_iterable(pairs:Iterable[Tuple]) -> np.ndarray:
+    """Calculates the element-wise difference for a collection of vector pairs"""
     return np.array([difference(pair) for pair in pairs])
 
-def create_same_author_vectors(author_ids:List[str], data:pd.DataFrame) -> Tuple[np.ndarray, List[int]]:
+@measure_time
+def create_same_author_similarity_vectors(author_ids:List[str], data:pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     """
     For each author, creates all possible distinct combinations of vector pairs and calculate their element-wise similarity
     """
@@ -99,15 +100,15 @@ def create_same_author_vectors(author_ids:List[str], data:pd.DataFrame) -> Tuple
     for author_id in author_ids:
         vectors = get_author_doc_vectors(data, author_id).select_dtypes(include=np.number).values
         same_author_vector_pairs = distinct_combinations(vectors.tolist(), r=2)
-        similarity_vectors = 1 - calculate_difference(same_author_vector_pairs)
+        similarity_vectors = 1 - calculate_difference_from_iterable(same_author_vector_pairs)
         
         for vector in similarity_vectors:
             X_train.append(vector)
             y_train.append(1)
             
-    return np.array(X_train), y_train
+    return np.array(X_train), np.array(y_train)
 
-
+@measure_time
 def sample_n_pairs(data:pd.DataFrame, n:int) -> List[DocumentPair]:
     """Creates n amount of different author document pairs"""
     
@@ -121,60 +122,80 @@ def sample_n_pairs(data:pd.DataFrame, n:int) -> List[DocumentPair]:
             seen_doc_id_pairs.append(pair.doc_id_pair)
     return pairs
 
-    
-    
-    
-    
-    
-
-def create_different_author_vectors(data:pd.DataFrame, same_vectors_shape:Tuple[int,int]) -> Tuple[np.ndarray, List[str]]:
+@measure_time 
+def create_different_author_similarity_vectors(pairs:List[DocumentPair]) -> Tuple[np.ndarray, np.ndarray]:
     """Creates similarity vectors using documents from different authors. The amount is equal to the # of same author vectors"""
-    
-    # X_train = []
-    # y_train = []
-    # for _ in range(same_vectors_shape[0]):
-    #     random_doc_1 = Document(data[["authorIDs", "fullText"]].sample(n=1))
-    #     random_doc_2 = Document(data[["authorIDs", "fullText"]].sample(n=1)) 
-    #     vector1 = apply_vectorizer([random_doc_1.text]).squeeze()
-    #     vector2 = apply_vectorizer([random_doc_2.text]).squeeze()
+    X_train = []
+    y_train = []
+    for pair in pairs:
+        v1 = pair.doc1.vector
+        v2 = pair.doc2.vector
+        similarity_vector = 1 - difference((v1, v2))
+        X_train.append(similarity_vector)
+        y_train.append(0)
         
-    #     if random_doc_1.author_id != random_doc_2.author_id:
-    #         similarity = 1 - difference([vector1, vector2])
-    #         X_train.append(similarity)
-    #         y_train.append(0)
-                        
-    # return np.array(X_train), y_train
+    return np.array(X_train), np.array(y_train)
 
 def write_to_file(obj, path:str):
     with open(path, "wb") as writer:
         pickle.dump(obj, writer)
+        
+def generate_ml_data(path:str):
+    """Applies metric learning data generation steps to a given dataset"""
+    print("Vectorizing data...\n")
+    document_vectors = apply_vectorizer(path)    
+    author_ids = get_unique_author_ids(document_vectors)
     
+    print("Creating same author similarity vectors...\n")
+    same_author_vectors, same_author_labels = create_same_author_similarity_vectors(author_ids, document_vectors)
+    
+    print(f"Creating different author document pairs...\n")
+    n = same_author_vectors.shape[0]
+    pairs = sample_n_pairs(document_vectors, n)
+ 
+    print("Creating different author similarity vectors...\n")
+    diff_author_vectors, diff_author_labels = create_different_author_similarity_vectors(pairs)
+    
+    X_train = np.concatenate([same_author_vectors, diff_author_vectors], axis=0)
+    y_train = np.concatenate([same_author_labels,diff_author_labels])
+    
+    return X_train, y_train
+
+
 @measure_time
 def main():
     
     parser = argparse.ArgumentParser()
     parser.add_argument("-d",
-                        "--dataset_dir",
-                        default="../../data/hrs_release_May23DryRun")
+                        "--dir",
+                        help="Directory containing the train, dev, and test directories with JSONL files",
+                        default="metric_learning/splits/hrs_release_May23DryRun")
     
     args = parser.parse_args()
-    document_vectors = load_data(args.dataset_dir)    
-    author_ids = get_unique_author_ids(document_vectors)
-    
-    #same_author_vectors, same_author_labels = create_same_author_vectors(author_ids, document_vectors)
- 
-    
-    
-    #diff_author_vectors, diff_author_labels = create_different_author_vectors(data, same_author_vectors.shape)
-    
-    sample_n_pairs(document_vectors, 20)
-    
-    # X_train = np.concatenate([same_author_vectors, diff_author_vectors], axis=0)
-    # y_train = same_author_labels + diff_author_labels
-    
+    data_dir = Path(args.dir)
 
-    # write_to_file(X_train, "metric_learn_data/X_train.pkl")
-    # write_to_file(y_train, "metric_learn_data/y_train.pkl")
+    for subdir in data_dir.iterdir():
         
+        if subdir.name == "train":
+            in_path = f"{args.dir}/train/train.jsonl"
+            X_out_path = f"{args.dir}/train/X_train.pkl"
+            y_out_path = f"{args.dir}/train/y_train.pkl"
+        elif subdir.name == "dev":
+            in_path = f"{args.dir}/dev/dev.jsonl"
+            X_out_path = f"{args.dir}/dev/X_dev.pkl"
+            y_out_path = f"{args.dir}/dev/y_dev.pkl"
+        elif subdir.name == "test":
+            in_path = f"{args.dir}/test/test.jsonl"
+            X_out_path = f"{args.dir}/test/X_test.pkl"
+            y_out_path = f"{args.dir}/test/y_test.pkl"
+        
+        print(f"Currently processing: '{in_path}'")
+        X, y = generate_ml_data(in_path)
+        
+        assert X.shape[0] == y.shape[0]
+        write_to_file(X, X_out_path)
+        write_to_file(y, y_out_path)
+    
+    
 if __name__ == "__main__":
     main()
