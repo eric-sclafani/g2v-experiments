@@ -131,3 +131,5 @@ dmypy.json
 # project
 data/*
 metric_learning/splits/*
+metric_learning/json_splits/*
+metric_learning/coefficients/

@@ -58,7 +58,7 @@ def main():
     
     parser.add_argument("-d",
                         "--dataset_dir",
-                        default="../data/hrs_release_May23DryRun")
+                        default="data/hrs_release_May23DryRun")
     
     parser.add_argument("--num_train",
                         type=int,
@@ -88,9 +88,9 @@ def main():
     dev_entries = get_all_entries_from_authors(data, dev)
     test_entries = get_all_entries_from_authors(data, test)
     
-    save_to_jsonlines(train_entries, "splits/hrs_release_May23DryRun/train/train.jsonl")
-    save_to_jsonlines(dev_entries, "splits/hrs_release_May23DryRun/dev/dev.jsonl")
-    save_to_jsonlines(test_entries, "splits/hrs_release_May23DryRun/test/test.jsonl")
+    save_to_jsonlines(train_entries, "metric_learning/json_splits/train.jsonl")
+    save_to_jsonlines(dev_entries, "metric_learning/json_splits/dev.jsonl")
+    save_to_jsonlines(test_entries, "metric_learning/json_splits/test.jsonl")
     
 if __name__ == "__main__":
     main()
