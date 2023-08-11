@@ -6,7 +6,7 @@ import numpy as np
 import time
 import pickle
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Tuple, Callable
 from dataclasses import dataclass
 from more_itertools import distinct_combinations
 
@@ -86,10 +86,12 @@ def difference(pair:Tuple[List, List]) -> np.ndarray:
     """Calculates the element-wise difference for two vectors"""
     return np.abs(to_array(pair[0]) - to_array(pair[1]))
 
+#! this function should be general and apply a given function to an iterable of pairs
 def calculate_difference_from_iterable(pairs:Iterable[Tuple]) -> np.ndarray:
     """Calculates the element-wise difference for a collection of vector pairs"""
     return np.array([difference(pair) for pair in pairs])
 
+#! make this function accept a function to apply
 @measure_time
 def create_same_author_similarity_vectors(author_ids:List[str], data:pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -122,6 +124,8 @@ def sample_n_pairs(data:pd.DataFrame, n:int) -> List[DocumentPair]:
             seen_doc_id_pairs.append(pair.doc_id_pair)
     return pairs
 
+
+#! make this function accept a function to apply
 @measure_time 
 def create_different_author_similarity_vectors(pairs:List[DocumentPair]) -> Tuple[np.ndarray, np.ndarray]:
     """Creates similarity vectors using documents from different authors. The amount is equal to the # of same author vectors"""
@@ -139,7 +143,8 @@ def create_different_author_similarity_vectors(pairs:List[DocumentPair]) -> Tupl
 def write_to_file(obj, path:str):
     with open(path, "wb") as writer:
         pickle.dump(obj, writer)
-        
+
+#! make this function accept a function to apply
 def generate_ml_data(path:str):
     """Applies metric learning data generation steps to a given dataset"""
     print("Vectorizing data...\n")
