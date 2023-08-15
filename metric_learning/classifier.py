@@ -67,7 +67,7 @@ def main():
     print(f"{'~'*50}\nClassification Report:\n{cl_report}\n{'~'*50}")
     
     os.chdir("metric_learning/coefficients")
-    save_pickle(f"{args.weights_filename}", fitted_model.coef_)
+    save_pickle(f"{args.weights_filename}", fitted_model.coef_.squeeze())
 
 if __name__ == "__main__":
     main()

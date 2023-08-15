@@ -162,12 +162,15 @@ def generate_ml_data(path:str, func:Callable):
 
 ###### Custom vector calculation functions ######
 
-def difference(pair:Tuple) -> np.ndarray:
+def difference(pair:Tuple[List|np.ndarray]) -> np.ndarray:
     """Calculates the element-wise difference for two vectors"""
     return np.abs(to_array(pair[0]) - to_array(pair[1]))
 
-def similarity(pair:Tuple) -> np.ndarray:
+def similarity(pair:Tuple[List|np.ndarray]) -> np.ndarray:
     return 1 - difference(pair)
+
+def concatenation(pair:Tuple[List|np.ndarray]) -> np.ndarray:
+    return np.concatenate([to_array(pair[0]), to_array(pair[1])])
 
 #################################################
 
@@ -215,7 +218,7 @@ def main():
         funcs = {
             "similarity" : similarity,
             "difference" : difference,
-            #concat
+            "concatenation" : concatenation
         }
         
         X, y = generate_ml_data(in_path, funcs[args.func]) # <--- insert function here to apply to pairs of vectors
