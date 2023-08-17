@@ -129,7 +129,8 @@ dmypy.json
 .pyre/
 
 # project
-data/*
+metric_learning/data/*
 metric_learning/splits/*
 metric_learning/json_splits/*
 metric_learning/coefficients/
+evaluation/data*

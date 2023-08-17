@@ -169,9 +169,6 @@ def difference(pair:Tuple[List|np.ndarray]) -> np.ndarray:
 def similarity(pair:Tuple[List|np.ndarray]) -> np.ndarray:
     return 1 - difference(pair)
 
-def concatenation(pair:Tuple[List|np.ndarray]) -> np.ndarray:
-    return np.concatenate([to_array(pair[0]), to_array(pair[1])])
-
 #################################################
 
 @measure_time
@@ -218,7 +215,6 @@ def main():
         funcs = {
             "similarity" : similarity,
             "difference" : difference,
-            "concatenation" : concatenation
         }
         
         X, y = generate_ml_data(in_path, funcs[args.func]) # <--- insert function here to apply to pairs of vectors
