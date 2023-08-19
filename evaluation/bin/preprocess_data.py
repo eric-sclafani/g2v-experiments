@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import pandas as pd
+import polars as pl
 import numpy as np
 from gram2vec import vectorizer
 
@@ -19,6 +20,12 @@ def load_imdb(path:str) -> pd.DataFrame:
     df.loc[len(df)] = temp
     return df
 
+def load_all_the_news(path:str) -> pl.DataFrame:
+    return pl.read_csv(path)
+
+
+
+
 
 
 
@@ -28,9 +35,10 @@ def main():
     
     IMDB_PATH = "data/imdb/raw/imdb1m-reviews.txt"
     BLOGS_PATH = "data/blogs/raw/blogtext.csv"
+    ALL_THE_NEWS_PATH = "evaluation/data/all-the-news/raw/all-the-news-2-1.csv.gz"
     
     
-    data = load_imdb(IMDB_PATH)
+    imdb = load_imdb(IMDB_PATH)
     
     import ipdb;ipdb.set_trace()
     
