@@ -167,7 +167,7 @@ def difference(pair:Tuple[List|np.ndarray]) -> np.ndarray:
     return np.abs(to_array(pair[0]) - to_array(pair[1]))
 
 def similarity(pair:Tuple[List|np.ndarray]) -> np.ndarray:
-    return 1 - difference(pair)
+    return 1 - difference(pair) # 1 - |a - b|
 
 #################################################
 

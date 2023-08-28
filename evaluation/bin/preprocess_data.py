@@ -2,8 +2,6 @@
 
 import pandas as pd
 import polars as pl
-import numpy as np
-from gram2vec import vectorizer
 
 
 def load_blogs(path:str) -> pd.DataFrame:
@@ -24,7 +22,11 @@ def load_all_the_news(path:str) -> pl.DataFrame:
     return pl.read_csv(path)
 
 
-
+def save_df_as_jsonlines(df, path:str) -> None:
+    
+    if isinstance(df, pl.DataFrame):
+        df = df.to_pandas()
+    return df.to_json(path, lines=True)
 
 
 
